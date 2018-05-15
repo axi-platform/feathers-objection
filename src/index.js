@@ -45,6 +45,8 @@ class Service {
     this.allowedEager = options.allowedEager || '[]'
     this.namedEagerFilters = options.namedEagerFilters
     this.eagerFilters = options.eagerFilters
+    this.allowedUpsert = options.allowedUpsert || '[]'
+    this.upsertGraphOptions = options.upsertGraphOptions
   }
 
   extend (obj) {
@@ -308,10 +310,35 @@ class Service {
           }
         }
 
+        // Keep related rows
+        const relationMappings = this.Model.relationMappings;
+        const relationMappingsKeys = (relationMappings) ? Object.keys(relationMappings) : [];
+        for (var key of relationMappingsKeys) {
+          if (data[key] === undefined) {
+            newObject[key] = null
+          } else {
+            newObject[key] = data[key]
+          }
+        }
+
+        const query = this.Model.query()
+
+        if (this.allowedUpsert) {
+          return query
+            .allowUpsert(this.allowedUpsert)
+            .upsertGraphAndFetch(newObject, this.upsertGraphOptions)
+            .then((res) => {
+              return res;
+              // NOTE (EK): Restore the id field so we can return it to the client
+              newObject[this.id] = id
+              return newObject
+            })
+        }
+
         // NOTE (EK): Delete id field so we don't update it
         delete newObject[this.id]
 
-        return this.Model.query()
+        return query
           .where(this.id, id)
           .update(newObject)
           .then(() => {
